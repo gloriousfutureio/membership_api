@@ -1,0 +1,33 @@
+version: '3'
+services:
+  api:
+    image: dsasf/membership/api
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    env_file:
+    - docker.env
+    - .env
+    links:
+    - db:mysql
+    ports:
+    - 8080:8080
+  db:
+    image: mariadb:latest
+    ports:
+    - 3306:3306
+    environment:
+    - MYSQL_ALLOW_EMPTY_PASSWORD=true
+    - MYSQL_DATABASE=dsa
+    volumes:
+    - ./mnt/db:/var/lib/mysql
+  migrate:
+    image: dsasf/membership/migrate
+    build:
+      context: .
+      dockerfile: docker/migrate/Dockerfile
+    env_file:
+    - docker.env
+    - .env
+    links:
+    - db:mysql
