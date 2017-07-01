@@ -1,17 +1,19 @@
-from decimal import Decimal, getcontext
 import random
-from typing import Any, List, Set
+from decimal import Decimal, getcontext
+from typing import List, Set
+
+from membership.database.models import Candidate
 
 ZERO = Decimal('0.00000')
 ONE = Decimal('1.00000')
 
 
 class Vote:
-    def __init__(self, choices: List[Any]) -> None:
+    def __init__(self, choices: List[Candidate]):
         self.weight = ONE
         self.choice_stack = list(reversed(choices))
 
-    def transfer(self, transfer_weight: Decimal, remaining_candidates: Set[Any]):
+    def transfer(self, transfer_weight: Decimal, remaining_candidates: Set[Candidate]) -> None:
         self.weight *= transfer_weight
         self.choice_stack.pop()
         while self.choice_stack and self.choice_stack[-1] not in remaining_candidates:
@@ -19,7 +21,7 @@ class Vote:
 
 
 class CandidateVotes:
-    def __init__(self, candidate):
+    def __init__(self, candidate: Candidate):
         self.candidate = candidate
         self.total = ZERO
         self.transfer_total = ZERO
@@ -27,7 +29,7 @@ class CandidateVotes:
 
 
 class STVElection:
-    def __init__(self, candidates, num_winners, choices_list: List[List[Any]]):
+    def __init__(self, candidates: List[Candidate], num_winners: int, choices_list: List[List[Candidate]]):
         self.votes = [Vote(choices) for choices in choices_list]
         self.winners = []
         self.remaining_candidates = set(candidates)
@@ -37,15 +39,13 @@ class STVElection:
         self.quota = int(len(self.votes) / (self.num_winners + 1)) + 1
         getcontext().prec = 5
 
-    def hold_election(self):
+    def hold_election(self) -> List[Candidate]:
         while len(self.winners) < self.num_winners and len(self.remaining_candidates) > 0:
             self.count_votes()
         return self.winners
 
-    def count_votes(self):
-        candidate_votes = {}  # type: Dict[Any, CandidateVote]
-        for candidate in self.remaining_candidates:
-            candidate_votes[candidate] = CandidateVotes(candidate)
+    def count_votes(self) -> None:
+        candidate_votes = {candidate: CandidateVotes(candidate) for candidate in self.remaining_candidates}
         for vote in self.votes:
             if len(vote.choice_stack) > 0 and vote.weight > ZERO:
                 cv = candidate_votes[vote.choice_stack[-1]]
@@ -60,8 +60,7 @@ class STVElection:
 
         result = list(candidate_votes.values())
         result.sort(key=lambda x: x.total, reverse=True)
-        if result[0].total >= self.quota or \
-                        len(self.remaining_candidates) <= self.num_winners - len(self.winners):
+        if result[0].total >= self.quota or len(self.remaining_candidates) <= self.num_winners - len(self.winners):
             i = 0
             round_winners = []
             while i < len(result) and result[i].total == result[0].total:
@@ -87,7 +86,7 @@ class STVElection:
             for vote in loser.votes:
                 vote.transfer(ONE, self.remaining_candidates)
 
-    def break_tie(self, round_winners: List[CandidateVotes], voting_round: int, win: bool):
+    def break_tie(self, round_winners: List[CandidateVotes], voting_round: int, win: bool) -> CandidateVotes:
         multiplier = 1 if win else -1
         if len(round_winners) == 1:
             return round_winners[0]

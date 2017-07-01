@@ -200,10 +200,12 @@ def election_count(requester: Member, session: Session):
 
 
 def hold_election(election: Election):
-    votes = []
-    for vote in election.votes:
-        if vote.ranking:
-            votes.append([v.candidate_id for v in vote.ranking])
+    votes = [
+        [v.candidate_id for v in vote.ranking]
+        for vote in election.votes if vote.ranking
+    ]
+    candidate_ids = [c.id for c in election.candidates]
+    print("CANDIDATE_IDS: {}, VOTES: {}, NUM WINNERS: {}".format(candidate_ids, votes, election.number_winners))
     stv = STVElection([c.id for c in election.candidates], election.number_winners, votes)
     stv.hold_election()
     return stv

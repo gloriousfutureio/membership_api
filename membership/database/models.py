@@ -1,20 +1,25 @@
-# coding: utf-8
 from datetime import datetime
-from membership.database.base import Base
-from sqlalchemy import Boolean, Column, Date, DateTime, Enum, ForeignKey, Integer, Float, Numeric, \
-    String, Time
-from sqlalchemy.orm import backref, reconstructor, relationship
+from typing import List
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy.orm import relationship
 from sqlalchemy.schema import UniqueConstraint
+
+from membership.database.base import Base
 
 
 class Member(Base):
     __tablename__ = 'members'
 
-    id = Column(Integer, primary_key=True, unique=True)
-    first_name = Column(String(45))
-    last_name = Column(String(45))
-    email_address = Column(String(254), unique=True)
-    biography = Column(String(10000))
+    id: int = Column(Integer, primary_key=True, unique=True)
+    first_name: str = Column(String(45))
+    last_name: str = Column(String(45))
+    email_address: str = Column(String(254), unique=True)
+    biography: str = Column(String(10000))
+
+    eligible_votes: 'List[EligibleVoter]' = relationship('EligibleVoter', back_populates='member')
+    meetings_attended: 'List[Attendee]' = relationship('Attendee', back_populates='member')
+    roles: 'List[Role]' = relationship('Role', back_populates='member')
 
     @property
     def name(self):
@@ -29,94 +34,101 @@ class Member(Base):
 class Committee(Base):
     __tablename__ = 'committees'
 
-    id = Column(Integer, primary_key=True, unique=True)
-    name = Column(String(45))
+    id: int = Column(Integer, primary_key=True, unique=True)
+    name: str = Column(String(45))
 
 
 class Role(Base):
     __tablename__ = 'roles'
 
-    id = Column(Integer, primary_key=True, unique=True)
-    committee_id = Column(ForeignKey('committees.id'))
-    member_id = Column(ForeignKey('members.id'))
-    role = Column(String(45))
+    id: int = Column(Integer, primary_key=True, unique=True)
+    committee_id: int = Column(ForeignKey('committees.id'))
+    member_id: int = Column(ForeignKey('members.id'))
+    role: str = Column(String(45))
 
-    committee = relationship(Committee)
-    member = relationship(Member, backref='roles')
+    committee: 'Committee' = relationship(Committee)
+    member: 'Member' = relationship('Member', back_populates='roles')
 
 
 class Meeting(Base):
     __tablename__ = 'meetings'
 
-    id = Column(Integer, primary_key=True, unique=True)
-    short_id = Column(Integer, nullable=False, unique=True)
-    name = Column(String(255), nullable=False)
-    committee_id = Column(ForeignKey('committees.id'))
-    start_time = Column(DateTime)
-    end_time = Column(DateTime)
+    id: int = Column(Integer, primary_key=True, unique=True)
+    short_id: int = Column(Integer, nullable=False, unique=True)
+    name: str = Column(String(255), nullable=False)
+    committee_id: int = Column(ForeignKey('committees.id'))
+    start_time: datetime = Column(DateTime)
+    end_time: datetime = Column(DateTime)
+
+    attendees: 'List[Attendee]' = relationship('Attendee', back_populates='meeting')
 
 
 class Attendee(Base):
     __tablename__ = 'attendees'
 
-    id = Column(Integer, primary_key=True, unique=True)
-    meeting_id = Column(ForeignKey('meetings.id'))
-    member_id = Column(ForeignKey('members.id'))
+    id: int = Column(Integer, primary_key=True, unique=True)
+    meeting_id: int = Column(ForeignKey('meetings.id'))
+    member_id: int = Column(ForeignKey('members.id'))
 
-    member = relationship(Member, backref='meetings_attended')
-    meeting = relationship(Meeting, backref='attendees')
+    member: 'Member' = relationship('Member', back_populates='meetings_attended')
+    meeting: 'Meeting' = relationship('Meeting', back_populates='attendees')
 
 
 class Election(Base):
     __tablename__ = 'elections'
 
-    id = Column(Integer, primary_key=True, unique=True)
-    name = Column(String(45), nullable=False)
-    status = Column(String(45), nullable=False, default='draft')
-    number_winners = Column(Integer)
+    id: int = Column(Integer, primary_key=True, unique=True)
+    name: str = Column(String(45), nullable=False)
+    status: str = Column(String(45), nullable=False, default='draft')
+    number_winners: int = Column(Integer)
+
+    candidates: 'List[Candidate]' = relationship('Candidate', back_populates='election')
+    votes: 'List[Vote]' = relationship('Vote', back_populates='election')
+    voters: 'List[EligibleVoter]' = relationship('EligibleVoter', back_populates='election')
 
 
 class Candidate(Base):
     __tablename__ = 'candidates'
 
-    id = Column(Integer, primary_key=True, unique=True)
-    member_id = Column(ForeignKey('members.id'))
-    election_id = Column(ForeignKey('elections.id'))
+    id: int = Column(Integer, primary_key=True, unique=True)
+    member_id: int = Column(ForeignKey('members.id'))
+    election_id: int = Column(ForeignKey('elections.id'))
 
-    member = relationship(Member)
-    election = relationship(Election, backref='candidates')
+    member: 'Member' = relationship(Member)
+    election: 'Election' = relationship('Election', back_populates='candidates')
 
 
 class Vote(Base):
     __tablename__ = 'votes'
     __table_args__ = (UniqueConstraint('vote_key', 'election_id'),)
 
-    id = Column(Integer, primary_key=True, unique=True)
-    vote_key = Column(Integer)
-    election_id = Column(ForeignKey('elections.id'))
+    id: int = Column(Integer, primary_key=True, unique=True)
+    vote_key: int = Column(Integer)
+    election_id: int = Column(ForeignKey('elections.id'))
 
-    election = relationship(Election, backref='votes')
+    election: 'Election' = relationship('Election', back_populates='votes')
+    ranking: 'List[Ranking]' = relationship('Ranking', back_populates='vote', order_by='Ranking.rank')
 
 
 class Ranking(Base):
     __tablename__ = 'rankings'
 
-    id = Column(Integer, primary_key=True, unique=True)
-    vote_id = Column(ForeignKey('votes.id'))
-    rank = Column(Integer)
-    candidate_id = Column(ForeignKey('candidates.id'))
+    id: int = Column(Integer, primary_key=True, unique=True)
+    vote_id: int = Column(ForeignKey('votes.id'))
+    rank: int = Column(Integer)
+    candidate_id: int = Column(ForeignKey('candidates.id'))
 
-    vote = relationship(Vote, backref=backref('ranking', order_by="Ranking.rank"))
-    candidate = relationship(Candidate)
+    vote: 'Vote' = relationship('Vote', back_populates='ranking')
+    candidate: 'Candidate' = relationship('Candidate')
 
 
 class EligibleVoter(Base):
     __tablename__ = 'eligible_voters'
 
-    id = Column(Integer, primary_key=True, unique=True)
-    member_id = Column(ForeignKey('members.id'))
-    voted = Column(Boolean)
-    election_id = Column(ForeignKey('elections.id'))
+    id: int = Column(Integer, primary_key=True, unique=True)
+    member_id: int = Column(ForeignKey('members.id'))
+    voted: bool = Column(Boolean)
+    election_id: int = Column(ForeignKey('elections.id'))
 
-    member = relationship(Member, backref='eligible_votes')
-    election = relationship(Election, backref='voters')
+    member: 'Member' = relationship('Member', back_populates='eligible_votes')
+    election: 'Election' = relationship('Election', back_populates='voters')
