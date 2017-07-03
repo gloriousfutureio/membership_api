@@ -16,6 +16,7 @@ election_api = Blueprint('election_api', __name__)
 @requires_auth(admin=False)
 def get_elections(requester: Member, session: Session):
     elections = session.query(Election).all()
+    elections = session.query(Election).all()
     result = {e.id: e.name for e in elections}
     return jsonify(result)
 
