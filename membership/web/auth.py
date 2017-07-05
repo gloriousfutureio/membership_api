@@ -1,17 +1,21 @@
+import json
+import logging
+import random
+import string
+import traceback
+from datetime import datetime, timedelta
+from functools import wraps
+from typing import List, Optional, Union
+
+import jwt
+import requests
+from flask import request, Response, jsonify
+
 from config.auth_config import JWT_SECRET, JWT_CLIENT_ID, ADMIN_CLIENT_ID, ADMIN_CLIENT_SECRET, \
     AUTH_CONNECTION, AUTH_URL, USE_AUTH, NO_AUTH_EMAIL
 from config.portal_config import PORTAL_URL
-from datetime import datetime, timedelta
-from functools import wraps
-from flask import request, Response, jsonify
-import jwt
-import logging
 from membership.database.base import Session
 from membership.database.models import Member
-import pkg_resources
-import random
-import requests
-import string
 
 PASSWORD_CHARS = string.ascii_letters + string.digits
 
@@ -25,6 +29,80 @@ def deny(reason: str= '') -> Response:
     })
     response.status_code = 401
     return response
+
+
+def exc_json(error: Exception):
+    return {
+        'type': type(error).__name__,
+        'message': str(error),
+        # TODO: Only show traceback if development mode
+        'traceback': traceback.format_exception(None, error, error.__traceback__),
+    }
+
+
+def error_response(status: int, errors: Optional[List[Union[str, dict, Exception]]] = None) -> Response:
+    """
+    Serializes the given errors into a response object with the given status.
+
+    :param status: The status code of the response
+    :param errors: An optional list of errors to put in the response body, if None then the response body will be empty
+    :return: a Response object with the given status code and the errors serialized as json
+    """
+    if errors is None:
+        response_body = None
+    elif isinstance(errors, list):
+        response_errors = []
+        for e in errors:
+            if isinstance(e, Exception):
+                response_errors.append(exc_json(e))
+            elif isinstance(e, (dict, str)):
+                response_errors.append(e)
+            else:
+                raise Exception('Cannot serialize error of type {}: {}'.format(type(e), e))
+        response_body = json.dumps({'errors': response_errors})
+    else:
+        raise Exception('Illegal argument for errors. Must be a list, not {}: {}'.format(type(errors), errors))
+    return Response(response=response_body, status=status)
+
+
+def authentication(required: bool=False):
+    """
+    A decorator that performs authentication without authorization.
+
+    This allows the controller function to define the behavior of authorization based on parameters.
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            if USE_AUTH:
+                auth = request.headers.get('authorization')
+                if auth:
+                    token = auth.split()[1]
+                    try:
+                        token = jwt.decode(token, JWT_SECRET, audience=JWT_CLIENT_ID)
+                    except Exception as e:
+                        return error_response(401, [e])
+                    email = token.get('email')
+                elif not required:
+                    email = None
+                else:
+                    return error_response(401, ['Authentication required'])
+            else:
+                email = NO_AUTH_EMAIL
+            session = Session()
+            try:
+                if email is None:
+                    requester = None
+                else:
+                    requester = session.query(Member).filter_by(email_address=email).one()
+                kwargs['requester'] = requester
+                kwargs['session'] = session
+                return f(*args, **kwargs)
+            finally:
+                session.close()
+
+        return decorated
+    return decorator
 
 
 def requires_auth(admin=False):

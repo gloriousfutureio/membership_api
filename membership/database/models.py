@@ -1,11 +1,18 @@
 from datetime import datetime
-from typing import List
+from typing import List, Optional, Union
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 from sqlalchemy.schema import UniqueConstraint
 
 from membership.database.base import Base
+
+
+class Committee(Base):
+    __tablename__ = 'committees'
+
+    id: int = Column(Integer, primary_key=True, unique=True)
+    name: str = Column(String(45))
 
 
 class Member(Base):
@@ -30,12 +37,12 @@ class Member(Base):
             n += ' ' + self.last_name
         return n
 
+    def has_committee_role(self, committee: Optional[Union[Committee, int]], role: str):
+        committee_id = committee.id if isinstance(committee, Committee) else committee
+        return any(mr.committee_id == committee_id and mr.role == role for mr in self.roles)
 
-class Committee(Base):
-    __tablename__ = 'committees'
-
-    id: int = Column(Integer, primary_key=True, unique=True)
-    name: str = Column(String(45))
+    def is_admin(self):
+        return self.has_committee_role(committee=None, role='admin')
 
 
 class Role(Base):
