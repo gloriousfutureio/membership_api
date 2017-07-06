@@ -6,7 +6,6 @@ from membership.database.base import Session
 from membership.database.models import Member
 from membership.schemas.graphql import schema
 from membership.web.auth import authentication, error_response
-from typing import Optional
 
 graphql_api = Blueprint('graphql_api', __name__)
 
